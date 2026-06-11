@@ -510,16 +510,16 @@ function App(){
             <i className={`ti ti-${copiedKey?"check":"copy"}`} style={{fontSize:12,color:"var(--blue)"}}/>
           </div>
           {session.isAdmin&&<span style={{fontSize:11,padding:"3px 8px",background:"#FFF3C4",color:"#7A4F00",border:"0.5px solid #E6B800",borderRadius:"var(--radius-md)"}}>Admin</span>}
-          {session.isAdmin&&<button className={`nav-btn${editMode?" active":""}`} onClick={()=>{setEditMode(e=>{if(e)setModal(null);return !e;});}}>
+          <button className={`nav-btn${editMode?" active":""}`} onClick={()=>{setEditMode(e=>{if(e)setModal(null);return !e;});}}>
             <i className={`ti ti-${editMode?"check":"layout-grid-add"}`}/>{editMode?"Done":"Edit layout"}
-          </button>}
+          </button>
           <button className="nav-btn" style={{fontSize:12}} onClick={()=>loadState(true)}><i className="ti ti-refresh"/></button>
           <span style={{fontSize:13,color:"var(--text-secondary)"}}>{session.name}</span>
           <button className="nav-btn ghost" onClick={()=>setSession(null)}><i className="ti ti-logout"/></button>
         </div>
       </nav>
 
-      {editMode&&session.isAdmin&&(
+      {editMode&&(
         <div className="edit-toolbar">
           {[["desks","Desks"],["rooms","Rooms"],["walls","Office shape"]].map(([t,l])=>(
             <button key={t} className={`edit-tab${editTab===t?" active":""}`} onClick={()=>setEditTab(t)}>{l}</button>
