@@ -28,7 +28,7 @@
   }
   html, body, #root { height: 100%; }
   body { background: var(--bg-tertiary); color: var(--text-primary); }
-  input[type="text"], input[type="email"], input[type="password"], select {
+  input[type="text"], select {
     display: block; width: 100%; padding: 8px 10px;
     border: 0.5px solid var(--border-hover); border-radius: var(--radius-md);
     background: var(--bg-primary); color: var(--text-primary);
@@ -79,7 +79,6 @@
   .floor-wrap { background: var(--bg-primary); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 1rem; flex: 1; position: relative; min-height: 400px; overflow: auto; }
   .room-chip { border: 0.5px solid var(--border); border-radius: var(--radius-md); padding: 8px 10px; margin-bottom: 6px; background: var(--bg-secondary); }
   .room-chip-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
-  .room-type-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
   .room-name-input { width: 100%; font-size: 12px; padding: 3px 6px; border-radius: var(--radius-md); border: 0.5px solid var(--border); background: var(--bg-primary); color: var(--text-primary); }
   .modal-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,.35); display: flex; align-items: center; justify-content: center; border-radius: var(--radius-lg); }
   .modal-card { background: var(--bg-primary); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 1.5rem; width: 300px; }
@@ -108,7 +107,7 @@
   .canvas-pm-btn { width: 22px; height: 22px; background: none; border: 0.5px solid var(--blue); border-radius: var(--radius-md); color: var(--blue); font-size: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
   .canvas-pm-btn:hover { background: var(--blue-light); }
   .pulse { animation: pulse 2s infinite; }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.4} }
   @media (max-width: 680px) { .sidebar { display: none; } }
 </style>
 </head>
@@ -117,7 +116,9 @@
 const { useState, useRef, useCallback, useEffect, useMemo } = React;
 
 // ── constants ─────────────────────────────────────────────────────────────────
-const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const ADMIN_KEY  = "FINTRX1";
+const ADMIN_NAME = "Fintrx1";
+const MONTHS     = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const DAY_LABELS = ["Su","Mo","Tu","We","Th","Fr","Sa"];
 const ROOM_TYPES = [
   {type:"meeting", label:"Meeting room", fill:"#E6F1FB", stroke:"#185FA5", text:"#0C447C"},
@@ -133,8 +134,8 @@ const DEFAULT_ROOMS = [
   {id:"r2",type:"meeting", x:410,y:20, w:130,h:110,label:"Meeting Room"},
   {id:"r3",type:"entrance",x:220,y:280,w:100,h:40, label:"Entrance"},
 ];
-const DW=44, DH=36;
-const DEFAULT_DESKS = [
+const DW=44,DH=36;
+const DEFAULT_DESKS=[
   {uid:1,label:1,x:70,y:130,w:DW,h:DH},{uid:2,label:2,x:130,y:130,w:DW,h:DH},{uid:3,label:3,x:190,y:130,w:DW,h:DH},{uid:4,label:4,x:250,y:130,w:DW,h:DH},{uid:5,label:5,x:310,y:130,w:DW,h:DH},
   {uid:6,label:6,x:70,y:190,w:DW,h:DH},{uid:7,label:7,x:130,y:190,w:DW,h:DH},{uid:8,label:8,x:190,y:190,w:DW,h:DH},{uid:9,label:9,x:250,y:190,w:DW,h:DH},{uid:10,label:10,x:310,y:190,w:DW,h:DH},
   {uid:11,label:11,x:370,y:130,w:DW,h:DH},{uid:12,label:12,x:430,y:130,w:DW,h:DH},
@@ -142,11 +143,10 @@ const DEFAULT_DESKS = [
   {uid:15,label:15,x:70,y:250,w:DW,h:DH},{uid:16,label:16,x:130,y:250,w:DW,h:DH},{uid:17,label:17,x:190,y:250,w:DW,h:DH},{uid:18,label:18,x:250,y:250,w:DW,h:DH},
   {uid:19,label:19,x:370,y:250,w:DW,h:DH},{uid:20,label:20,x:430,y:250,w:DW,h:DH},
 ];
-const ADMIN_KEY = "FINTRX1";
-const ADMIN_NAME = "Fintrx1";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 function genKey(){ const c="ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; return Array.from({length:8},()=>c[Math.floor(Math.random()*c.length)]).join(""); }
+function todayStr(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
 function dateKey(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
 function parseKey(k){ const [y,m,d]=k.split("-").map(Number); return new Date(y,m-1,d); }
 function fmtDate(k){ return parseKey(k).toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"}); }
@@ -160,11 +160,21 @@ function ptSegDist(px,py,ax,ay,bx,by){
   return Math.hypot(px-(ax+t*dx),py-(ay+t*dy));
 }
 function relabel(desks){ return desks.map((d,i)=>({...d,label:i+1})); }
-function todayStr(){ return dateKey(new Date()); }
+function purgePast(bookings){ const today=todayStr(); const out={}; Object.keys(bookings).forEach(dk=>{ if(dk>=today) out[dk]=bookings[dk]; }); return out; }
 
-// ── storage helpers ───────────────────────────────────────────────────────────
-async function storageGet(key){ try{ const r=await window.storage.get(key,true); return r?JSON.parse(r.value):null; }catch{ return null; } }
-async function storageSet(key,val){ try{ await window.storage.set(key,JSON.stringify(val),true); return true; }catch{ return false; } }
+// ── API ───────────────────────────────────────────────────────────────────────
+async function apiGet(){
+  try{
+    const r=await fetch("/api/state"); 
+    if(!r.ok) return null;
+    return await r.json();
+  }catch{ return null; }
+}
+async function apiPost(type,data){
+  try{
+    await fetch("/api/state",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type,data})});
+  }catch(e){ console.error("apiPost failed",e); }
+}
 
 // ── drag ──────────────────────────────────────────────────────────────────────
 const drag={current:null};
@@ -181,67 +191,58 @@ function AuthScreen({onEnter}){
   const [error,setError]=useState("");
   const [copied,setCopied]=useState(false);
 
-  const handleNew=()=>{
-    if(!name.trim()){setError("Please enter your name.");return;}
-    const k=genKey(); setGeneratedKey(k); setMode("showKey"); setError("");
-  };
+  const handleNew=()=>{ if(!name.trim()){setError("Please enter your name.");return;} const k=genKey(); setGeneratedKey(k); setMode("showKey"); setError(""); };
   const handleReturning=()=>{
     const k=inputKey.trim().toUpperCase().replace(/\s/g,"");
     if(k.length<6){setError("Please enter your access key.");return;}
-    const isAdmin = k === ADMIN_KEY;
-    onEnter({name: isAdmin ? ADMIN_NAME : "User", accessKey:k, isAdmin});
+    const isAdmin=k===ADMIN_KEY;
+    onEnter({name:isAdmin?ADMIN_NAME:"User",accessKey:k,isAdmin});
   };
   const copy=()=>{ navigator.clipboard?.writeText(generatedKey).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2000);}); };
 
-  return (
-    <div className="auth-wrap">
-      <div className="auth-card">
-        <div className="auth-logo">
-          <div className="auth-logo-icon"><i className="ti ti-building"/></div>
-          <span style={{fontSize:18,fontWeight:700}}>DeskBook</span>
-        </div>
-        {mode==="start"&&<>
-          <h1 className="auth-h">Welcome</h1>
-          <p className="auth-sub">Everyone books with their own personal key — only you can cancel your own seats. Bookings are shared live across all users.</p>
-          <button className="auth-btn" onClick={()=>{setMode("new");setError("");}}>
-            <i className="ti ti-plus" style={{marginRight:6}}/>New — get my access key
-          </button>
-          <button className="auth-btn secondary" onClick={()=>{setMode("returning");setError("");}}>
-            <i className="ti ti-key" style={{marginRight:6}}/>I have an access key
-          </button>
-        </>}
-        {mode==="new"&&<>
-          <h1 className="auth-h">Create access key</h1>
-          <p className="auth-sub">Your key is how others identify your bookings. Save it — you'll need it to sign back in.</p>
-          <div className="field"><label>Your name</label>
-            <input type="text" value={name} onChange={e=>{setName(e.target.value);setError("");}} placeholder="e.g. Alex Chen" onKeyDown={e=>e.key==="Enter"&&handleNew()}/>
-          </div>
-          {error&&<p className="auth-error">{error}</p>}
-          <button className="auth-btn" onClick={handleNew}>Generate my key</button>
-          <button className="auth-btn secondary" onClick={()=>setMode("start")}>Back</button>
-        </>}
-        {mode==="showKey"&&<>
-          <h1 className="auth-h">Your access key</h1>
-          <p className="auth-sub">Write it down — it's the only way to sign back in and cancel your bookings.</p>
-          <div className="key-box">
-            <span className="key-mono">{generatedKey}</span>
-            <button className="key-copy-btn" onClick={copy}><i className={`ti ti-${copied?"check":"copy"}`}/></button>
-          </div>
-          <p style={{fontSize:11,color:"var(--text-tertiary)",marginBottom:16}}>Signed in as <strong style={{color:"var(--text-secondary)"}}>{name}</strong></p>
-          <button className="auth-btn" onClick={()=>onEnter({name:name.trim(),accessKey:generatedKey,isAdmin:false})}>I've saved it — enter DeskBook</button>
-        </>}
-        {mode==="returning"&&<>
-          <h1 className="auth-h">Enter your key</h1>
-          <p className="auth-sub">Enter the access key from when you first signed up.</p>
-          <div className="field"><label>Access key</label>
-            <input type="text" value={inputKey} onChange={e=>{setInputKey(e.target.value.toUpperCase());setError("");}} placeholder="e.g. AB3K7X2M" onKeyDown={e=>e.key==="Enter"&&handleReturning()} style={{fontFamily:"monospace",letterSpacing:".1em"}}/>
-          </div>
-          {error&&<p className="auth-error">{error}</p>}
-          <button className="auth-btn" onClick={handleReturning}>Sign in</button>
-          <button className="auth-btn secondary" onClick={()=>setMode("start")}>Back</button>
-        </>}
+  return(
+    <div className="auth-wrap"><div className="auth-card">
+      <div className="auth-logo">
+        <div className="auth-logo-icon"><i className="ti ti-building"/></div>
+        <span style={{fontSize:18,fontWeight:700}}>DeskBook</span>
       </div>
-    </div>
+      {mode==="start"&&<>
+        <h1 className="auth-h">Welcome</h1>
+        <p className="auth-sub">Book a desk for your day in the office. Each person gets a unique access key to manage their own bookings.</p>
+        <button className="auth-btn" onClick={()=>{setMode("new");setError("");}}><i className="ti ti-plus" style={{marginRight:6}}/>New — get my access key</button>
+        <button className="auth-btn secondary" onClick={()=>{setMode("returning");setError("");}}><i className="ti ti-key" style={{marginRight:6}}/>I have an access key</button>
+      </>}
+      {mode==="new"&&<>
+        <h1 className="auth-h">Create access key</h1>
+        <p className="auth-sub">Your key is tied to your bookings — only you can cancel them. Save it somewhere safe.</p>
+        <div className="field"><label>Your name</label>
+          <input type="text" value={name} onChange={e=>{setName(e.target.value);setError("");}} placeholder="e.g. Alex Chen" onKeyDown={e=>e.key==="Enter"&&handleNew()}/>
+        </div>
+        {error&&<p className="auth-error">{error}</p>}
+        <button className="auth-btn" onClick={handleNew}>Generate my key</button>
+        <button className="auth-btn secondary" onClick={()=>setMode("start")}>Back</button>
+      </>}
+      {mode==="showKey"&&<>
+        <h1 className="auth-h">Your access key</h1>
+        <p className="auth-sub">Write this down — it's the only way to sign back in and manage your bookings.</p>
+        <div className="key-box">
+          <span className="key-mono">{generatedKey}</span>
+          <button className="key-copy-btn" onClick={copy}><i className={`ti ti-${copied?"check":"copy"}`}/></button>
+        </div>
+        <p style={{fontSize:11,color:"var(--text-tertiary)",marginBottom:16}}>Signed in as <strong style={{color:"var(--text-secondary)"}}>{name}</strong></p>
+        <button className="auth-btn" onClick={()=>onEnter({name:name.trim(),accessKey:generatedKey,isAdmin:false})}>I've saved it — enter DeskBook</button>
+      </>}
+      {mode==="returning"&&<>
+        <h1 className="auth-h">Enter your key</h1>
+        <p className="auth-sub">Enter the access key from when you first signed up.</p>
+        <div className="field"><label>Access key</label>
+          <input type="text" value={inputKey} onChange={e=>{setInputKey(e.target.value.toUpperCase());setError("");}} placeholder="e.g. AB3K7X2M" onKeyDown={e=>e.key==="Enter"&&handleReturning()} style={{fontFamily:"monospace",letterSpacing:".1em"}}/>
+        </div>
+        {error&&<p className="auth-error">{error}</p>}
+        <button className="auth-btn" onClick={handleReturning}>Sign in</button>
+        <button className="auth-btn secondary" onClick={()=>setMode("start")}>Back</button>
+      </>}
+    </div></div>
   );
 }
 
@@ -262,70 +263,59 @@ function App(){
   const [rooms,      setRooms]      = useState(DEFAULT_ROOMS);
   const [wallPts,    setWallPts]    = useState(DEFAULT_WALL_PTS);
   const [bookings,   setBookings]   = useState({});
+  const [canvasW,    setCanvasW]    = useState(560);
+  const [canvasH,    setCanvasH]    = useState(360);
+  const [nextUid,    setNextUid]    = useState(DEFAULT_DESKS.length+1);
+  const [nextRoomId, setNextRoomId] = useState(DEFAULT_ROOMS.length+1);
   const [modal,      setModal]      = useState(null);
   const [editMode,   setEditMode]   = useState(false);
   const [editTab,    setEditTab]    = useState("desks");
   const [addRoomType,setAddRoomType]= useState("meeting");
-  const [canvasW,    setCanvasW]    = useState(560);
-  const [canvasH,    setCanvasH]    = useState(360);
-  const [nextUid,    setNextUid]    = useState(()=>DEFAULT_DESKS.length+1);
-  const [nextRoomId, setNextRoomId] = useState(()=>DEFAULT_ROOMS.length+1);
   const [hovEdge,    setHovEdge]    = useState(null);
   const [copiedKey,  setCopiedKey]  = useState(false);
-  const [lastSync,   setLastSync]   = useState(null);
 
   const svgRef=useRef(null);
-  const appRef=useRef(null);
   const hovRafRef=useRef(null);
   const pollRef=useRef(null);
+  const saveTimerRef=useRef(null);
 
-  // ── load shared state from storage ────────────────────────────────────────
-  const loadState = useCallback(async (quiet=false)=>{
-    if(!quiet) setLoading(true);
-    else setSyncing(true);
-    try {
-      const [bk, layout] = await Promise.all([
-        storageGet("deskbook:bookings"),
-        storageGet("deskbook:layout"),
-      ]);
-      if(bk) setBookings(bk);
-      if(layout){
-        if(layout.desks)   setDesks(layout.desks);
-        if(layout.rooms)   setRooms(layout.rooms);
-        if(layout.wallPts) setWallPts(layout.wallPts);
-        if(layout.canvasW) setCanvasW(layout.canvasW);
-        if(layout.canvasH) setCanvasH(layout.canvasH);
-        if(layout.nextUid) setNextUid(layout.nextUid);
-        if(layout.nextRoomId) setNextRoomId(layout.nextRoomId);
+  // ── load from API ─────────────────────────────────────────────────────────
+  const loadState=useCallback(async(quiet=false)=>{
+    if(!quiet) setLoading(true); else setSyncing(true);
+    const data=await apiGet();
+    if(data){
+      if(data.bookings){ const clean=purgePast(data.bookings); setBookings(clean); }
+      if(data.layout){
+        const l=data.layout;
+        if(l.desks)      setDesks(l.desks);
+        if(l.rooms)      setRooms(l.rooms);
+        if(l.wallPts)    setWallPts(l.wallPts);
+        if(l.canvasW)    setCanvasW(l.canvasW);
+        if(l.canvasH)    setCanvasH(l.canvasH);
+        if(l.nextUid)    setNextUid(l.nextUid);
+        if(l.nextRoomId) setNextRoomId(l.nextRoomId);
       }
-      setLastSync(Date.now());
-    } finally {
-      setLoading(false); setSyncing(false);
     }
+    setLoading(false); setSyncing(false);
   },[]);
 
-  // ── save bookings ─────────────────────────────────────────────────────────
-  const saveBookings = useCallback(async (bk)=>{
-    await storageSet("deskbook:bookings", bk);
-    setLastSync(Date.now());
-  },[]);
-
-  // ── save layout (admin only) ───────────────────────────────────────────────
-  const saveLayout = useCallback(async (patch)=>{
-    const current = await storageGet("deskbook:layout") || {};
-    await storageSet("deskbook:layout", {...current,...patch});
-    setLastSync(Date.now());
-  },[]);
-
-  // ── poll for changes every 10s ────────────────────────────────────────────
   useEffect(()=>{
     if(!session) return;
     loadState();
-    pollRef.current = setInterval(()=>loadState(true), 10000);
+    pollRef.current=setInterval(()=>loadState(true),8000);
     return ()=>clearInterval(pollRef.current);
   },[session,loadState]);
 
-  // ── SVG helpers ───────────────────────────────────────────────────────────
+  // ── debounced layout save ─────────────────────────────────────────────────
+  const schedSaveLayout=useCallback((patch)=>{
+    if(saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current=setTimeout(()=>{
+      // read latest from state refs to avoid stale closure
+      apiPost("layout",patch);
+    },600);
+  },[]);
+
+  // ── SVG coord helper ──────────────────────────────────────────────────────
   const getSVGPt=useCallback((e)=>{
     const svg=svgRef.current; if(!svg) return null;
     try{
@@ -342,32 +332,41 @@ function App(){
     const onMove=(e)=>{
       if(!drag.current||rafId) return;
       rafId=requestAnimationFrame(()=>{
-        rafId=null;
-        if(!drag.current) return;
+        rafId=null; if(!drag.current) return;
         const p=getSVGPt(e); if(!p) return;
         const d=drag.current;
-        if(d.kind==="desk"){ const nx=clamp(snap(p.x-d.ox),25,canvasW-25),ny=clamp(snap(p.y-d.oy),25,canvasH-25); setDesks(prev=>prev.map(dk=>dk.uid===d.id?{...dk,x:nx,y:ny}:dk)); }
-        else if(d.kind==="desk-resize"){ const nw=snap(Math.max(24,d.sw+(p.x-d.sx))),nh=snap(Math.max(20,d.sh+(p.y-d.sy))); setDesks(prev=>prev.map(dk=>dk.uid!==d.id?dk:{...dk,w:nw,h:nh})); }
-        else if(d.kind==="room"){ const nx=clamp(snap(p.x-d.ox),10,canvasW-20),ny=clamp(snap(p.y-d.oy),10,canvasH-20); setRooms(prev=>prev.map(r=>r.id===d.id?{...r,x:nx,y:ny}:r)); }
+        if(d.kind==="desk"){ setDesks(prev=>prev.map(dk=>dk.uid===d.id?{...dk,x:clamp(snap(p.x-d.ox),25,canvasW-25),y:clamp(snap(p.y-d.oy),25,canvasH-25)}:dk)); }
+        else if(d.kind==="desk-resize"){ setDesks(prev=>prev.map(dk=>dk.uid!==d.id?dk:{...dk,w:snap(Math.max(24,d.sw+(p.x-d.sx))),h:snap(Math.max(20,d.sh+(p.y-d.sy)))})); }
+        else if(d.kind==="room"){ setRooms(prev=>prev.map(r=>r.id===d.id?{...r,x:clamp(snap(p.x-d.ox),10,canvasW-20),y:clamp(snap(p.y-d.oy),10,canvasH-20)}:r)); }
         else if(d.kind==="room-resize"){ setRooms(prev=>prev.map(r=>{
           if(r.id!==d.id) return r;
           let{x,y,w,h}=r;
           if(d.e==="se"){w=snap(Math.max(40,p.x-x));h=snap(Math.max(20,p.y-y));}
-          if(d.e==="sw"){const nx2=snap(Math.min(p.x,x+w-40));w=snap(x+w-nx2);x=nx2;h=snap(Math.max(20,p.y-y));}
-          if(d.e==="ne"){const ny2=snap(Math.min(p.y,y+h-20));h=snap(y+h-ny2);y=ny2;w=snap(Math.max(40,p.x-x));}
-          if(d.e==="nw"){const nx2=snap(Math.min(p.x,x+w-40)),ny2=snap(Math.min(p.y,y+h-20));w=snap(x+w-nx2);x=nx2;h=snap(y+h-ny2);y=ny2;}
+          if(d.e==="sw"){const nx=snap(Math.min(p.x,x+w-40));w=snap(x+w-nx);x=nx;h=snap(Math.max(20,p.y-y));}
+          if(d.e==="ne"){const ny=snap(Math.min(p.y,y+h-20));h=snap(y+h-ny);y=ny;w=snap(Math.max(40,p.x-x));}
+          if(d.e==="nw"){const nx=snap(Math.min(p.x,x+w-40)),ny=snap(Math.min(p.y,y+h-20));w=snap(x+w-nx);x=nx;h=snap(y+h-ny);y=ny;}
           return {...r,x,y,w,h};
         }));}
-        else if(d.kind==="wall-pt"){ const nx=clamp(snap(p.x),5,canvasW+15),ny=clamp(snap(p.y),5,canvasH+15); setWallPts(prev=>prev.map((pt,i)=>i===d.i?{x:nx,y:ny}:pt)); }
+        else if(d.kind==="wall-pt"){ setWallPts(prev=>prev.map((pt,i)=>i===d.i?{x:clamp(snap(p.x),5,canvasW+15),y:clamp(snap(p.y),5,canvasH+15)}:pt)); }
       });
     };
-    const onUp=()=>{drag.current=null;if(rafId){cancelAnimationFrame(rafId);rafId=null;}};
+    const onUp=()=>{ drag.current=null; if(rafId){cancelAnimationFrame(rafId);rafId=null;} };
     window.addEventListener("mousemove",onMove,{passive:true});
     window.addEventListener("mouseup",onUp);
     window.addEventListener("touchmove",onMove,{passive:true});
     window.addEventListener("touchend",onUp);
-    return ()=>{ window.removeEventListener("mousemove",onMove); window.removeEventListener("mouseup",onUp); window.removeEventListener("touchmove",onMove); window.removeEventListener("touchend",onUp); if(rafId){cancelAnimationFrame(rafId);rafId=null;} };
+    return()=>{ window.removeEventListener("mousemove",onMove); window.removeEventListener("mouseup",onUp); window.removeEventListener("touchmove",onMove); window.removeEventListener("touchend",onUp); if(rafId){cancelAnimationFrame(rafId);rafId=null;} };
   },[getSVGPt,canvasW,canvasH]);
+
+  // save layout on drag end
+  const onLayoutUp=useCallback(()=>{
+    if(!drag.current) return;
+    const k=drag.current.kind;
+    if(k==="desk"||k==="desk-resize") setTimeout(()=>setDesks(prev=>{apiPost("layout",{desks:prev,rooms,wallPts,canvasW,canvasH,nextUid,nextRoomId});return prev;}),80);
+    if(k==="room"||k==="room-resize") setTimeout(()=>setRooms(prev=>{apiPost("layout",{desks,rooms:prev,wallPts,canvasW,canvasH,nextUid,nextRoomId});return prev;}),80);
+    if(k==="wall-pt") setTimeout(()=>setWallPts(prev=>{apiPost("layout",{desks,rooms,wallPts:prev,canvasW,canvasH,nextUid,nextRoomId});return prev;}),80);
+  },[desks,rooms,wallPts,canvasW,canvasH,nextUid,nextRoomId]);
+  useEffect(()=>{ window.addEventListener("mouseup",onLayoutUp); window.addEventListener("touchend",onLayoutUp); return()=>{ window.removeEventListener("mouseup",onLayoutUp); window.removeEventListener("touchend",onLayoutUp); }; },[onLayoutUp]);
 
   // ── desk handlers ─────────────────────────────────────────────────────────
   const onDeskDown=useCallback((e,uid)=>{ e.preventDefault(); const p=getSVGPt(e); if(!p) return; const dk=desks.find(d=>d.uid===uid); if(!dk) return; drag.current={kind:"desk",id:uid,ox:p.x-dk.x,oy:p.y-dk.y}; },[getSVGPt,desks]);
@@ -377,14 +376,15 @@ function App(){
     setNextUid(prev=>{
       const nu=prev+1;
       setDesks(d=>{ const nd=relabel([...d,{uid:prev,label:d.length+1,x:280,y:180,w:DW,h:DH}]);
-        saveLayout({desks:nd,nextUid:nu}); return nd; });
+        apiPost("layout",{desks:nd,rooms,wallPts,canvasW,canvasH,nextUid:nu,nextRoomId}); return nd; });
       return nu;
     });
-  },[saveLayout]);
+  },[rooms,wallPts,canvasW,canvasH,nextRoomId]);
 
   const removeDesk=useCallback((uid)=>{
-    setDesks(prev=>{ const nd=relabel(prev.filter(d=>d.uid!==uid)); saveLayout({desks:nd}); return nd; });
-  },[saveLayout]);
+    setDesks(prev=>{ const nd=relabel(prev.filter(d=>d.uid!==uid));
+      apiPost("layout",{desks:nd,rooms,wallPts,canvasW,canvasH,nextUid,nextRoomId}); return nd; });
+  },[rooms,wallPts,canvasW,canvasH,nextUid,nextRoomId]);
 
   // ── room handlers ─────────────────────────────────────────────────────────
   const onRoomDown=useCallback((e,id)=>{ e.preventDefault(); const p=getSVGPt(e); if(!p) return; const r=rooms.find(r=>r.id===id); if(!r) return; drag.current={kind:"room",id,ox:p.x-r.x,oy:p.y-r.y}; },[getSVGPt,rooms]);
@@ -395,54 +395,48 @@ function App(){
       const nid=prev+1;
       const rt=ROOM_TYPES.find(r=>r.type===addRoomType)||ROOM_TYPES[0];
       setRooms(r=>{ const nr=[...r,{id:"r"+prev,type:addRoomType,x:160,y:130,w:120,h:80,label:rt.label}];
-        saveLayout({rooms:nr,nextRoomId:nid}); return nr; });
+        apiPost("layout",{desks,rooms:nr,wallPts,canvasW,canvasH,nextUid,nextRoomId:nid}); return nr; });
       return nid;
     });
-  },[addRoomType,saveLayout]);
+  },[desks,wallPts,canvasW,canvasH,nextUid,addRoomType]);
 
-  const removeRoom=useCallback((id)=>{ setRooms(p=>{ const nr=p.filter(r=>r.id!==id); saveLayout({rooms:nr}); return nr; }); },[saveLayout]);
-  const renameRoom=useCallback((id,label)=>{ setRooms(p=>{ const nr=p.map(r=>r.id===id?{...r,label}:r); saveLayout({rooms:nr}); return nr; }); },[saveLayout]);
+  const removeRoom=useCallback((id)=>{ setRooms(prev=>{ const nr=prev.filter(r=>r.id!==id); apiPost("layout",{desks,rooms:nr,wallPts,canvasW,canvasH,nextUid,nextRoomId}); return nr; }); },[desks,wallPts,canvasW,canvasH,nextUid,nextRoomId]);
+  const renameRoom=useCallback((id,label)=>{ setRooms(prev=>{ const nr=prev.map(r=>r.id===id?{...r,label}:r); apiPost("layout",{desks,rooms:nr,wallPts,canvasW,canvasH,nextUid,nextRoomId}); return nr; }); },[desks,wallPts,canvasW,canvasH,nextUid,nextRoomId]);
 
   // ── wall handlers ─────────────────────────────────────────────────────────
   const onWallPtDown=useCallback((e,i)=>{ e.preventDefault();e.stopPropagation(); drag.current={kind:"wall-pt",i}; },[]);
-  const insertWallPt=useCallback((i)=>{ setWallPts(prev=>{ const n=prev.length,a=prev[i],b=prev[(i+1)%n],np={x:snap((a.x+b.x)/2),y:snap((a.y+b.y)/2)},next=[...prev]; next.splice(i+1,0,np); saveLayout({wallPts:next}); return next; }); setHovEdge(null); },[saveLayout]);
-  const removeWallPt=useCallback((i)=>{ setWallPts(prev=>{ if(prev.length<=3) return prev; const nw=prev.filter((_,j)=>j!==i); saveLayout({wallPts:nw}); return nw; }); },[saveLayout]);
-  const resetWalls=useCallback(()=>{ setWallPts(DEFAULT_WALL_PTS); saveLayout({wallPts:DEFAULT_WALL_PTS}); },[saveLayout]);
+  const insertWallPt=useCallback((i)=>{ setWallPts(prev=>{ const n=prev.length,a=prev[i],b=prev[(i+1)%n],np={x:snap((a.x+b.x)/2),y:snap((a.y+b.y)/2)},next=[...prev]; next.splice(i+1,0,np); apiPost("layout",{desks,rooms,wallPts:next,canvasW,canvasH,nextUid,nextRoomId}); return next; }); setHovEdge(null); },[desks,rooms,canvasW,canvasH,nextUid,nextRoomId]);
+  const removeWallPt=useCallback((i)=>{ setWallPts(prev=>{ if(prev.length<=3) return prev; const nw=prev.filter((_,j)=>j!==i); apiPost("layout",{desks,rooms,wallPts:nw,canvasW,canvasH,nextUid,nextRoomId}); return nw; }); },[desks,rooms,canvasW,canvasH,nextUid,nextRoomId]);
+  const resetWalls=useCallback(()=>{ setWallPts(DEFAULT_WALL_PTS); apiPost("layout",{desks,rooms,wallPts:DEFAULT_WALL_PTS,canvasW,canvasH,nextUid,nextRoomId}); },[desks,rooms,canvasW,canvasH,nextUid,nextRoomId]);
 
-  // save layout on drag-end for desks/rooms/walls
-  const onLayoutMouseUp=useCallback(()=>{
-    if(!drag.current) return;
-    const d=drag.current;
-    setTimeout(()=>{
-      if(d.kind==="desk"||d.kind==="desk-resize") setDesks(prev=>{ saveLayout({desks:prev}); return prev; });
-      if(d.kind==="room"||d.kind==="room-resize") setRooms(prev=>{ saveLayout({rooms:prev}); return prev; });
-      if(d.kind==="wall-pt") setWallPts(prev=>{ saveLayout({wallPts:prev}); return prev; });
-    },50);
-  },[saveLayout]);
-  useEffect(()=>{ window.addEventListener("mouseup",onLayoutMouseUp); window.addEventListener("touchend",onLayoutMouseUp); return ()=>{ window.removeEventListener("mouseup",onLayoutMouseUp); window.removeEventListener("touchend",onLayoutMouseUp); }; },[onLayoutMouseUp]);
+  const setCanvasWS=useCallback(fn=>{ setCanvasW(prev=>{ const nv=fn(prev); apiPost("layout",{desks,rooms,wallPts,canvasW:nv,canvasH,nextUid,nextRoomId}); return nv; }); },[desks,rooms,wallPts,canvasH,nextUid,nextRoomId]);
+  const setCanvasHS=useCallback(fn=>{ setCanvasH(prev=>{ const nv=fn(prev); apiPost("layout",{desks,rooms,wallPts,canvasW,canvasH:nv,nextUid,nextRoomId}); return nv; }); },[desks,rooms,wallPts,canvasW,nextUid,nextRoomId]);
 
   // ── booking handlers ──────────────────────────────────────────────────────
   const bookDesk=useCallback(async(uid)=>{
     if(!session) return;
-    const fresh=await storageGet("deskbook:bookings")||{};
-    if(fresh[selDate]?.[uid]){ setBookings(fresh); setModal(null); return; }
-    const nb={...fresh,[selDate]:{...(fresh[selDate]||{}),[uid]:{name:session.name,accessKey:session.accessKey}}};
-    setBookings(nb);
-    await saveBookings(nb);
+    const fresh=await apiGet();
+    const freshBk=fresh?.bookings||{};
+    if(freshBk[selDate]?.[uid]){ setBookings(purgePast(freshBk)); setModal(null); return; }
+    const nb={...freshBk,[selDate]:{...(freshBk[selDate]||{}),[uid]:{name:session.name,accessKey:session.accessKey}}};
+    const clean=purgePast(nb);
+    setBookings(clean);
+    await apiPost("bookings",clean);
     setModal(null);
-  },[selDate,session,saveBookings]);
+  },[selDate,session]);
 
   const cancelBooking=useCallback(async(dk,uid)=>{
     if(!session) return;
-    const fresh=await storageGet("deskbook:bookings")||{};
-    const slot=fresh[dk]?.[uid];
+    const fresh=await apiGet();
+    const freshBk=fresh?.bookings||{};
+    const slot=freshBk[dk]?.[uid];
     if(slot&&slot.accessKey!==session.accessKey&&!session.isAdmin) return;
-    const b={...(fresh[dk]||{})}; delete b[uid];
-    const nb={...fresh,[dk]:b};
+    const b={...(freshBk[dk]||{})}; delete b[uid];
+    const nb=purgePast({...freshBk,[dk]:b});
     setBookings(nb);
-    await saveBookings(nb);
+    await apiPost("bookings",nb);
     setModal(null);
-  },[session,saveBookings]);
+  },[session]);
 
   // ── calendar ──────────────────────────────────────────────────────────────
   const prevMonth=useCallback(()=>{ if(viewMonth===0){setViewMonth(11);setViewYear(y=>y-1);}else setViewMonth(m=>m-1); },[viewMonth]);
@@ -484,35 +478,30 @@ function App(){
   const handleDeskClick=useCallback((uid)=>{
     if(editMode) return;
     const slot=bk[uid];
-    if(!slot){ setModal({uid,mode:"book"}); return; }
-    if(slot.accessKey===session?.accessKey){ setModal({uid,mode:"mine"}); return; }
+    if(!slot){setModal({uid,mode:"book"});return;}
+    if(slot.accessKey===session?.accessKey){setModal({uid,mode:"mine"});return;}
     setModal({uid,mode:"locked"});
   },[editMode,bk,session]);
 
   const copyKey=useCallback(()=>{ navigator.clipboard?.writeText(session.accessKey).then(()=>{setCopiedKey(true);setTimeout(()=>setCopiedKey(false),2000);}); },[session]);
 
-  // ── canvas size sync ──────────────────────────────────────────────────────
-  const setCanvasWSync=useCallback(fn=>{ setCanvasW(prev=>{ const nv=fn(prev); saveLayout({canvasW:nv}); return nv; }); },[saveLayout]);
-  const setCanvasHSync=useCallback(fn=>{ setCanvasH(prev=>{ const nv=fn(prev); saveLayout({canvasH:nv}); return nv; }); },[saveLayout]);
-
   // ─────────────────────────────────────────────────────────────────────────
   if(!session) return <AuthScreen onEnter={s=>setSession(s)}/>;
 
-  if(loading) return (
+  if(loading) return(
     <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:12,background:"var(--bg-tertiary)"}}>
-      <div className="topnav-logo" style={{width:40,height:40,fontSize:22}}><i className="ti ti-building"/></div>
+      <div style={{width:40,height:40,background:"var(--blue-light)",borderRadius:"var(--radius-md)",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--blue)",fontSize:22}}><i className="ti ti-building"/></div>
       <p style={{fontSize:14,color:"var(--text-secondary)"}}>Loading floor plan…</p>
     </div>
   );
 
-  return (
-    <div id="app-shell" ref={appRef}>
+  return(
+    <div id="app-shell">
       <nav className="topnav">
         <div style={{display:"flex",alignItems:"center",gap:10}}>
           <div className="topnav-logo"><i className="ti ti-building"/></div>
           <span style={{fontSize:15,fontWeight:600}}>DeskBook</span>
           {syncing&&<span className="pulse" style={{fontSize:11,color:"var(--text-tertiary)"}}>syncing…</span>}
-          {!syncing&&lastSync&&<span style={{fontSize:11,color:"var(--text-tertiary)"}}>live</span>}
         </div>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
           <div style={{display:"flex",alignItems:"center",gap:6,padding:"4px 10px",background:"var(--blue-light)",border:"0.5px solid var(--blue-mid)",borderRadius:"var(--radius-md)",cursor:"pointer"}} onClick={copyKey}>
@@ -521,18 +510,16 @@ function App(){
             <i className={`ti ti-${copiedKey?"check":"copy"}`} style={{fontSize:12,color:"var(--blue)"}}/>
           </div>
           {session.isAdmin&&<span style={{fontSize:11,padding:"3px 8px",background:"#FFF3C4",color:"#7A4F00",border:"0.5px solid #E6B800",borderRadius:"var(--radius-md)"}}>Admin</span>}
-          <button className={`nav-btn${editMode?" active":""}`} onClick={()=>{setEditMode(e=>{if(e)setModal(null);return !e;});}}>
+          {session.isAdmin&&<button className={`nav-btn${editMode?" active":""}`} onClick={()=>{setEditMode(e=>{if(e)setModal(null);return !e;});}}>
             <i className={`ti ti-${editMode?"check":"layout-grid-add"}`}/>{editMode?"Done":"Edit layout"}
-          </button>
-          <button className="nav-btn" style={{fontSize:12}} onClick={()=>loadState(true)}>
-            <i className="ti ti-refresh"/>
-          </button>
+          </button>}
+          <button className="nav-btn" style={{fontSize:12}} onClick={()=>loadState(true)}><i className="ti ti-refresh"/></button>
           <span style={{fontSize:13,color:"var(--text-secondary)"}}>{session.name}</span>
           <button className="nav-btn ghost" onClick={()=>setSession(null)}><i className="ti ti-logout"/></button>
         </div>
       </nav>
 
-      {editMode&&(
+      {editMode&&session.isAdmin&&(
         <div className="edit-toolbar">
           {[["desks","Desks"],["rooms","Rooms"],["walls","Office shape"]].map(([t,l])=>(
             <button key={t} className={`edit-tab${editTab===t?" active":""}`} onClick={()=>setEditTab(t)}>{l}</button>
@@ -548,14 +535,14 @@ function App(){
           {editTab==="walls"&&<div style={{display:"flex",alignItems:"center",gap:8}}>
             <span style={{fontSize:12,color:"var(--blue)",fontWeight:500}}>Canvas:</span>
             <div style={{display:"flex",alignItems:"center",gap:4}}><span style={{fontSize:11,color:"#5F5E5A"}}>W</span>
-              <button className="canvas-pm-btn" onClick={()=>setCanvasWSync(w=>Math.max(300,w-80))}>−</button>
+              <button className="canvas-pm-btn" onClick={()=>setCanvasWS(w=>Math.max(300,w-80))}>−</button>
               <span style={{fontSize:12,color:"var(--blue)",minWidth:36,textAlign:"center"}}>{canvasW}</span>
-              <button className="canvas-pm-btn" onClick={()=>setCanvasWSync(w=>Math.min(1400,w+80))}>+</button>
+              <button className="canvas-pm-btn" onClick={()=>setCanvasWS(w=>Math.min(1400,w+80))}>+</button>
             </div>
             <div style={{display:"flex",alignItems:"center",gap:4}}><span style={{fontSize:11,color:"#5F5E5A"}}>H</span>
-              <button className="canvas-pm-btn" onClick={()=>setCanvasHSync(h=>Math.max(200,h-60))}>−</button>
+              <button className="canvas-pm-btn" onClick={()=>setCanvasHS(h=>Math.max(200,h-60))}>−</button>
               <span style={{fontSize:12,color:"var(--blue)",minWidth:36,textAlign:"center"}}>{canvasH}</span>
-              <button className="canvas-pm-btn" onClick={()=>setCanvasHSync(h=>Math.min(1000,h+60))}>+</button>
+              <button className="canvas-pm-btn" onClick={()=>setCanvasHS(h=>Math.min(1000,h+60))}>+</button>
             </div>
             <button className="nav-btn" style={{height:30,fontSize:12,color:"var(--blue)",borderColor:"var(--blue)"}} onClick={resetWalls}><i className="ti ti-refresh"/> Reset</button>
           </div>}
@@ -589,10 +576,10 @@ function App(){
 
           {editMode&&editTab==="rooms"&&<div style={{flex:1,overflowY:"auto"}}>
             <div className="section-label">Rooms</div>
-            {rooms.map(r=>{ const rt=ROOM_TYPES.find(t=>t.type===r.type)||ROOM_TYPES[0]; return (
+            {rooms.map(r=>{ const rt=ROOM_TYPES.find(t=>t.type===r.type)||ROOM_TYPES[0]; return(
               <div key={r.id} className="room-chip">
                 <div className="room-chip-row">
-                  <div className="room-type-dot" style={{background:rt.fill,border:`1px solid ${rt.stroke}`}}/>
+                  <div style={{width:10,height:10,borderRadius:2,flexShrink:0,background:rt.fill,border:`1px solid ${rt.stroke}`}}/>
                   <span style={{fontSize:11,fontWeight:500,color:rt.text}}>{r.type}</span>
                   <button style={{marginLeft:"auto",background:"none",border:"none",color:"var(--red)",cursor:"pointer",fontSize:11}} onClick={()=>removeRoom(r.id)}>Remove</button>
                 </div>
@@ -628,11 +615,9 @@ function App(){
         </aside>
 
         <section className="content">
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-            <h2 style={{fontSize:15,fontWeight:600}}>
-              {editMode?"Edit layout — "+editTab:"Floor plan — "+fmtDate(selDate)}
-            </h2>
-          </div>
+          <h2 style={{fontSize:15,fontWeight:600}}>
+            {editMode?"Edit layout — "+editTab:"Floor plan — "+fmtDate(selDate)}
+          </h2>
 
           {!editMode&&<div className="stat-row">
             <div className="stat-card" style={{background:"#C0DD97",color:"#3B6D11"}}><div className="stat-num">{availCount}</div><div className="stat-lbl">Available</div></div>
@@ -642,7 +627,7 @@ function App(){
 
           {editMode&&<div className="info-banner">
             <i className="ti ti-info-circle"/>
-            {editTab==="desks"&&"Drag to move · Blue corner = resize · Red ✕ = remove · Changes save automatically"}
+            {editTab==="desks"&&"Drag to move · Blue corner = resize · Red ✕ = remove · Changes save automatically for all users"}
             {editTab==="rooms"&&"Drag to move · Corner handles to resize · Rename in sidebar · Changes save automatically"}
             {editTab==="walls"&&"Drag corners · Click edge to add point · Right-click corner to remove · Changes save automatically"}
           </div>}
@@ -659,7 +644,7 @@ function App(){
 
               <polygon points={wallPolyline} fill="#FAFAF9" stroke="none"/>
 
-              {rooms.map(r=>{ const rt=ROOM_TYPES.find(t=>t.type===r.type)||ROOM_TYPES[0]; const isRE=editMode&&editTab==="rooms"; return (
+              {rooms.map(r=>{ const rt=ROOM_TYPES.find(t=>t.type===r.type)||ROOM_TYPES[0]; const isRE=editMode&&editTab==="rooms"; return(
                 <g key={r.id}>
                   <rect x={r.x} y={r.y} width={r.w} height={r.h} fill={rt.fill} stroke={isRE?"#378ADD":rt.stroke} strokeWidth={isRE?1.5:0.8} rx={2} style={{cursor:isRE?"move":"default"}} onMouseDown={e=>{if(isRE)onRoomDown(e,r.id);}}/>
                   <text x={r.x+r.w/2} y={r.y+r.h/2+4} textAnchor="middle" fontSize="10" fill={rt.text} fontFamily="inherit" style={{pointerEvents:"none"}}>{r.label}</text>
@@ -668,7 +653,7 @@ function App(){
                   ))}
                   {isRE&&<g onClick={ev=>{ev.stopPropagation();removeRoom(r.id);}} style={{cursor:"pointer"}}>
                     <circle cx={r.x+r.w} cy={r.y} r={7} fill="#E24B4A"/>
-                    <text x={r.x+r.w} y={r.y+4} textAnchor="middle" fontSize="9" fill="#fff" fontFamily="inherit" style={{pointerEvents:"none"}}>✕</text>
+                    <text x={r.x+r.w} y={r.y+4} textAnchor="middle" fontSize="9" fill="#fff" style={{pointerEvents:"none"}}>✕</text>
                   </g>}
                 </g>
               );})}
@@ -677,13 +662,13 @@ function App(){
                 const fill=isDE?"#E6F1FB":isMine?"#B5D4F4":isTaken?"#F7C1C1":"#C0DD97";
                 const stroke=isDE?"#378ADD":isMine?"#185FA5":isTaken?"#E24B4A":"#639922";
                 const tc=isDE?"#185FA5":isMine?"#0C447C":isTaken?"#A32D2D":"#3B6D11";
-                return (
+                return(
                   <g key={desk.uid} style={{cursor:isDE?"grab":isTaken?"not-allowed":"pointer"}}
                     onMouseDown={e=>{if(isDE)onDeskDown(e,desk.uid);}}
                     onClick={()=>handleDeskClick(desk.uid)}>
                     <rect x={desk.x-desk.w/2} y={desk.y-desk.h/2} width={desk.w} height={desk.h} rx={5} fill={fill} stroke={stroke} strokeWidth={1}/>
                     <text x={desk.x} y={desk.y+1} textAnchor="middle" dominantBaseline="middle" fontSize={Math.max(8,Math.min(13,desk.h*0.38))} fontWeight="600" fill={tc} fontFamily="inherit">{desk.label}</text>
-                    {isTaken&&!isDE&&<text x={desk.x} y={desk.y+desk.h/2-4} textAnchor="middle" fontSize="6" fill={tc} fontFamily="inherit" style={{pointerEvents:"none"}}>🔒</text>}
+                    {isTaken&&!isDE&&<text x={desk.x} y={desk.y+desk.h/2-4} textAnchor="middle" fontSize="6" fill={tc} style={{pointerEvents:"none"}}>🔒</text>}
                     {isDE&&<>
                       <g onClick={e=>{e.stopPropagation();removeDesk(desk.uid);}} style={{cursor:"pointer"}}>
                         <circle cx={desk.x+desk.w/2} cy={desk.y-desk.h/2} r={7} fill="#E24B4A"/>
@@ -698,7 +683,7 @@ function App(){
               <polygon points={wallPolyline} fill="none" stroke={editMode&&editTab==="walls"?"#378ADD":"#5F5E5A"} strokeWidth={2} strokeLinejoin="round"/>
 
               {editMode&&editTab==="walls"&&wallPts.map((pt,i)=>{
-                const next=wallPts[(i+1)%wallPts.length]; const m=midPt(pt,next); const isHov=hovEdge===i;
+                const next=wallPts[(i+1)%wallPts.length],m=midPt(pt,next),isHov=hovEdge===i;
                 return <g key={"e"+i}>
                   <line x1={pt.x} y1={pt.y} x2={next.x} y2={next.y} stroke="transparent" strokeWidth={16} style={{cursor:"cell"}} onClick={()=>insertWallPt(i)}/>
                   <circle cx={m.x} cy={m.y} r={isHov?6:3.5} fill={isHov?"#185FA5":"#fff"} stroke="#378ADD" strokeWidth={1.5} style={{pointerEvents:"none"}}/>
@@ -719,7 +704,7 @@ function App(){
               const slot=bk[modal.uid];
               const deskLabel=desks.find(d=>d.uid===modal.uid)?.label??modal.uid;
               const bookerName=slot?.name??"";
-              return (
+              return(
                 <div className="modal-backdrop" onClick={()=>setModal(null)}>
                   <div className="modal-card" onClick={e=>e.stopPropagation()}>
                     {modal.mode==="book"&&<>
